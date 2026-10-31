@@ -1,0 +1,36 @@
+{% extends "employees/base.html" %}
+
+{% block content %}
+
+<div class="alert alert-warning">
+
+    <h4>Delete Employee</h4>
+
+    <p>
+        Are you sure you want to delete
+        <strong>{{ employee.name }}</strong>?
+    </p>
+
+</div>
+
+<form method="post">
+
+    {% csrf_token %}
+
+    <button
+        type="submit"
+        class="btn btn-danger"
+    >
+        Yes, Delete
+    </button>
+
+    <a
+        href="{% url 'employee_detail' employee.id %}"
+        class="btn btn-secondary"
+    >
+        Cancel
+    </a>
+
+</form>
+
+{% endblock %}

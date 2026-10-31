@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Employee Portal Login</title>
+</head>
+<body>
+    <h2>Employee Portal Login</h2>
+
+    {% if form.errors %}
+        <p style="color:red;">
+            Invalid username or password.
+        </p>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+
+        {{ form.as_p }}
+
+        <input type="hidden"
+               name="next"
+               value="{{ next }}">
+
+        <button type="submit">Login</button>
+    </form>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Employee Registration</title>
+</head>
+<body>
+
+    <h2>Employee Portal Registration</h2>
+
+    <form method="POST">
+        {% csrf_token %}
+
+        {{ form.as_p }}
+
+        <button type="submit">
+            Register
+        </button>
+    </form>
+
+    <p>
+        Already have an account?
+        <a href="{% url 'login' %}">
+            Login here
+        </a>
+    </p>
+
+</body>
+</html>
