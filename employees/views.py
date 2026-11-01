@@ -3,25 +3,50 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required , permission_required
 from .models import Department, Employee
 from django.contrib.auth import login
+from django.db.models import Q
+from django.core.exceptions import PermissionDenied
 from .forms import RegisterForm
 
 from .forms import EmployeeForm
 
+@login_required
 def home(request):
     total_employees = Employee.objects.count()
+    active_employees = Employee.objects.filter(is_active=True).count()
     total_departments = Department.objects.count()
+    recent_employees = Employee.objects.order_by("-joining_date")[:5]
+
+    context = {
+         "total_employees": 
+             Employee.objects.count(),
+
+         "active_employees":
+                Employee.objects.filter(
+                    is_active=True
+                ).count(),
+    
+         "total_departments":  
+                Department.objects.count(),
+
+         "recent_employees":
+                Employee.objects.order_by(
+                    "-joining_date"
+                )[:5],
+    }
 
     context = {
         "total_employees": total_employees,
-        "total_departments": total_departments
+        "active_employees": active_employees,
+        "total_departments": total_departments,
+        "recent_employees": recent_employees,
     }
-
     return render(
         request,
         "employees/home.html",
         context
     )
 
+   
 @login_required
 def employee_list(request):
     employees = Employee.objects.all()
@@ -118,6 +143,9 @@ def employee_update(request, employee_id):
                 employee_id=employee.id
             )
 
+    if not request.user.is_superuser:
+         raise PermissionDenied
+
     else:
 
         form = EmployeeForm(
@@ -199,3 +227,29 @@ def register(request):
             "form": form
         }
     )
+
+@login_required
+def employee_list(request):
+    query = request.GET.get("q", "").strip()
+
+    employees = Employee.objects.select_related(
+        "department"
+    )
+
+    if query:
+        employees = employees.filter(
+            Q(name__icontains=query)
+            |Q(email__icontains=query)
+            |Q(department__name__icontains=query)
+            |Q(designation__icontains=query)
+        )
+
+    return render(
+        request,
+        "employees/employee_list.html",
+        {
+            "employees": employees,
+            "query": query,
+        }
+    )
+

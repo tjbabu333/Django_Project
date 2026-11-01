@@ -15,6 +15,38 @@
 
 {% endif %}
 
+<form method="get" class="row g-2 mb-3">
+
+    <div class="col-md-8">
+        <input
+            type="text"
+            name="q"
+            value="{{ query }}"
+            class="form-control"
+            placeholder="Search by name, email, department..."
+        >
+    </div>
+
+    <div class="col-md-2">
+        <button
+            type="submit"
+            class="btn btn-primary w-100"
+        >
+            Search
+        </button>
+    </div>
+
+    <div class="col-md-2">
+        <a
+            href="{% url 'employee_list' %}"
+            class="btn btn-secondary w-100"
+        >
+            Clear
+        </a>
+    </div>
+
+</form>
+
 <table class="table table-striped">
 
     <thead>
