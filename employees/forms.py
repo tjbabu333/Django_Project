@@ -1,8 +1,10 @@
-from django import forms
+from typing import ClassVar
 
-from .models import Employee
+from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
+
+from .models import Employee
 
 
 class RegisterForm(UserCreationForm):
@@ -14,12 +16,12 @@ class RegisterForm(UserCreationForm):
     class Meta:
         model = User
 
-        fields = [
+        fields = (
             "username",
             "email",
             "password1",
             "password2",
-        ]
+        )
 
 
 class EmployeeForm(forms.ModelForm):
@@ -46,7 +48,7 @@ class EmployeeForm(forms.ModelForm):
     class Meta:
         model = Employee
 
-        fields = [
+        fields = (
             "name",
             "email",
             "department",
@@ -54,9 +56,9 @@ class EmployeeForm(forms.ModelForm):
             "designation",
             "joining_date",
             "is_active",
-        ]
+        )
 
-        widgets = {
+        widgets : ClassVar[dict] = {
             "name": forms.TextInput(
                 attrs={
                     "class": "form-control"

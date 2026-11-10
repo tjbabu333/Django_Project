@@ -1,65 +1,135 @@
-from django.contrib import messages 
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required , permission_required
-from .models import Department, Employee
-from django.contrib.auth import login
-from django.db.models import Q
-from django.core.exceptions import PermissionDenied
-from .forms import RegisterForm
 
-from .forms import EmployeeForm
+from asyncio.log import logger
+
+from django.contrib import messages
+from django.contrib.auth import login
+from django.contrib.auth.decorators import (
+    login_required,
+    permission_required,
+)
+from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.http import JsonResponse
+from django.shortcuts import (
+    get_object_or_404,
+    redirect,
+    render,
+)
+
+from .forms import EmployeeForm, RegisterForm
+from .models import Department, Employee
+
+# ==========================================
+# HOME DASHBOARD
+# ==========================================
 
 @login_required
 def home(request):
-    total_employees = Employee.objects.count()
-    active_employees = Employee.objects.filter(is_active=True).count()
-    total_departments = Department.objects.count()
-    recent_employees = Employee.objects.order_by("-joining_date")[:5]
 
     context = {
-         "total_employees": 
-             Employee.objects.count(),
+        "total_employees": Employee.objects.count(),
 
-         "active_employees":
-                Employee.objects.filter(
-                    is_active=True
-                ).count(),
-    
-         "total_departments":  
-                Department.objects.count(),
+        "active_employees": Employee.objects.filter(
+            is_active=True
+        ).count(),
 
-         "recent_employees":
-                Employee.objects.order_by(
-                    "-joining_date"
-                )[:5],
+        "total_departments": Department.objects.count(),
+
+        "recent_employees": Employee.objects.order_by(
+            "-joining_date"
+        )[:5],
     }
 
-    context = {
-        "total_employees": total_employees,
-        "active_employees": active_employees,
-        "total_departments": total_departments,
-        "recent_employees": recent_employees,
-    }
     return render(
         request,
         "employees/home.html",
         context
     )
 
-   
+
+# ==========================================
+# EMPLOYEE LIST
+# ==========================================
+
 @login_required
+@permission_required(
+    "employees.view_employee",
+    raise_exception=True
+)
 def employee_list(request):
-    employees = Employee.objects.all()
+
+    # Get search input
+    query = request.GET.get("q", "").strip()
+
+    # Get selected department
+    department_id = request.GET.get(
+        "department", ""
+    ).strip()
+
+    # Retrieve employees
+    employees = Employee.objects.select_related(
+        "department"
+    ).all()
+
+    # Apply search filter
+    if query:
+        employees = employees.filter(
+            Q(name__icontains=query)
+            | Q(email__icontains=query)
+            | Q(department__name__icontains=query)
+            | Q(designation__icontains=query)
+        )
+
+    # Apply department filter
+    if department_id:
+        if department_id.isdecimal():
+            employees = employees.filter(
+                department_id=int(department_id)
+            )
+        else:
+            employees = employees.none()
+
+    # Order employees
+    employees = employees.order_by("id")
+
+    # Retrieve ALL departments
+    departments = Department.objects.all().order_by(
+        "name"
+    )
+
+    # Pagination
+    paginator = Paginator(employees, 5)
+
+    page_number = request.GET.get("page", 1)
+
+    page_obj = paginator.get_page(page_number)
+
+    # Single context dictionary
+    context = {
+        "employees": page_obj.object_list,
+        "departments": departments,
+        "page_obj": page_obj,
+        "query": query,
+        "selected_department": department_id,
+    }
 
     return render(
         request,
         "employees/employee_list.html",
-        {
-            "employees": employees
-        }
+        context
     )
 
+
+# ==========================================
+# EMPLOYEE DETAILS
+# ==========================================
+
 @login_required
+@permission_required(
+    "employees.view_employee",
+    raise_exception=True
+)
 def employee_detail(request, employee_id):
 
     employee = get_object_or_404(
@@ -77,16 +147,19 @@ def employee_detail(request, employee_id):
         }
     )
 
+
+# ==========================================
+# CREATE EMPLOYEE
+# ==========================================
+
 @login_required
-@permission_required( 
-    "employees.add_employee", 
+@permission_required(
+    "employees.add_employee",
     raise_exception=True
 )
-
 def employee_create(request):
 
     if request.method == "POST":
-
         form = EmployeeForm(request.POST)
 
         if form.is_valid():
@@ -111,6 +184,11 @@ def employee_create(request):
         }
     )
 
+
+# ==========================================
+# UPDATE EMPLOYEE
+# ==========================================
+
 @login_required
 @permission_required(
     "employees.change_employee",
@@ -123,6 +201,12 @@ def employee_update(request, employee_id):
         id=employee_id
     )
 
+    # Admins can update employees.
+    # Managers with change_employee permission
+    # can also update employees.
+    # Add record-level restrictions here if
+    # Managers may edit only certain employees.
+
     if request.method == "POST":
 
         form = EmployeeForm(
@@ -133,6 +217,11 @@ def employee_update(request, employee_id):
         if form.is_valid():
             form.save()
 
+            logger.info(
+               "Employee %s updated by user %s",
+                employee.id,
+                request.user.pk
+            )
             messages.success(
                 request,
                 "Employee updated successfully."
@@ -143,11 +232,7 @@ def employee_update(request, employee_id):
                 employee_id=employee.id
             )
 
-    if not request.user.is_superuser:
-         raise PermissionDenied
-
     else:
-
         form = EmployeeForm(
             instance=employee
         )
@@ -161,12 +246,21 @@ def employee_update(request, employee_id):
         }
     )
 
+
+# ==========================================
+# DELETE EMPLOYEE
+# ==========================================
+
 @login_required
 @permission_required(
     "employees.delete_employee",
     raise_exception=True
 )
 def employee_delete(request, employee_id):
+
+    # Admin-only delete
+    if not request.user.is_superuser:
+        raise PermissionDenied
 
     employee = get_object_or_404(
         Employee,
@@ -192,6 +286,11 @@ def employee_delete(request, employee_id):
         }
     )
 
+
+# ==========================================
+# USER REGISTRATION
+# ==========================================
+
 def register(request):
 
     if request.method == "POST":
@@ -204,10 +303,7 @@ def register(request):
 
             user = form.save()
 
-            login(
-                request,
-                user
-            )
+            login(request, user)
 
             messages.success(
                 request,
@@ -217,7 +313,6 @@ def register(request):
             return redirect("home")
 
     else:
-
         form = RegisterForm()
 
     return render(
@@ -228,28 +323,92 @@ def register(request):
         }
     )
 
-@login_required
-def employee_list(request):
-    query = request.GET.get("q", "").strip()
 
-    employees = Employee.objects.select_related(
-        "department"
+# ==========================================
+# AJAX EMPLOYEE SEARCH API
+# ==========================================
+
+@login_required
+@permission_required(
+    "employees.view_employee",
+    raise_exception=True
+)
+def employee_search_api(request):
+
+    # Read search parameters
+    query = request.GET.get(
+        "q", ""
+    ).strip()
+
+    department_id = request.GET.get(
+        "department", ""
+    ).strip()
+
+    page_number = request.GET.get(
+        "page", "1"
     )
 
+    # Validate department
+    if department_id and not department_id.isdecimal():
+
+        return JsonResponse(
+            {
+                "error": "Invalid department ID."
+            },
+            status=400
+        )
+
+    # Get employee records
+    employees = Employee.objects.select_related(
+        "department"
+    ).all()
+
+    # Search by multiple fields
     if query:
         employees = employees.filter(
             Q(name__icontains=query)
-            |Q(email__icontains=query)
-            |Q(department__name__icontains=query)
-            |Q(designation__icontains=query)
+            | Q(email__icontains=query)
+            | Q(designation__icontains=query)
+            | Q(department__name__icontains=query)
         )
 
-    return render(
-        request,
-        "employees/employee_list.html",
-        {
-            "employees": employees,
-            "query": query,
-        }
+    # Department filtering
+    if department_id:
+        employees = employees.filter(
+            department_id=int(department_id)
+        )
+
+    # Order results
+    employees = employees.order_by("id")
+
+    # Pagination
+    paginator = Paginator(employees, 5)
+
+    page_obj = paginator.get_page(
+        page_number
     )
+
+    # Convert employees to JSON
+    employee_data = []
+
+    for employee in page_obj:
+
+        employee_data.append({
+            "id": employee.id,
+            "name": employee.name,
+            "email": employee.email,
+            "designation": employee.designation,
+            "department": employee.department.name,
+            "salary": str(employee.salary)
+        })
+
+    return JsonResponse({
+        "employees": employee_data,
+        "page": page_obj.number,
+        "num_pages": paginator.num_pages,
+        "has_next": page_obj.has_next(),
+        "has_previous": page_obj.has_previous(),
+        "total_count": paginator.count
+    })
+
 
